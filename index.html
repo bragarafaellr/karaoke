@@ -24,6 +24,14 @@
   #score .n { font-size: 72px; font-weight: 800; letter-spacing: -0.04em; color: #7c5cff; line-height: 1; }
   #score .m { font-size: 18px; font-weight: 600; margin-top: 8px; }
   #score .s { font-size: 13px; color: #6b6484; }
+  #tvcard {
+    position: absolute; inset: 0; z-index: 1; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    background: #161320; text-align: center; padding: 24px; gap: 8px;
+  }
+  #tvcard.on { display: flex; }
+  #tvcard .lbl { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: #8b82a8; }
+  #tvcard .t { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
   #now { margin: 12px 0; font-size: 18px; font-weight: 600; min-height: 27px; }
   .row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
   input {
@@ -70,9 +78,14 @@
     <div class="s"></div>
     <button id="nextBtn" style="margin-top:16px">Próxima ▶</button>
   </div>
+  <div id="tvcard">
+    <div class="lbl">Cantando agora</div>
+    <div class="t" id="tvTitle"></div>
+  </div>
 </div>
 <div id="now"></div>
 <div class="row">
+  <button class="ghost" id="modeBtn">📺 Usar TV externa</button>
   <button class="ghost" id="skipBtn">Pular ⏭</button>
   <span id="votes"></span>
 </div>
@@ -90,6 +103,10 @@
 <div class="row">
   <input id="q" placeholder="ex: evidências karaokê — ou cole um link do YouTube">
   <button id="goBtn">Buscar</button>
+</div>
+<div class="row">
+  <input id="pl" placeholder="Cole a URL de uma playlist do YouTube">
+  <button id="plBtn">Importar</button>
 </div>
 
 <h2>Fila</h2>
@@ -146,6 +163,8 @@ function initPlayer() {
 if (window.YT && window.YT.Player) initPlayer();
 else window.onYouTubeIframeAPIReady = initPlayer;
 
+const YT_KEY = 'AIzaSyA4gvuREQP7LIDijMceoh2914qh39cTkNQ';
+
 function videoId(url) {
   const m = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/);
   return m ? m[1] : (/^[\w-]{11}$/.test(url.trim()) ? url.trim() : null);
@@ -160,9 +179,8 @@ async function go() {
     document.getElementById('q').value = '';
     return;
   }
-  const key = 'AIzaSyA4gvuREQP7LIDijMceoh2914qh39cTkNQ';
   const url = 'https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=10'
-    + '&videoEmbeddable=true&q=' + encodeURIComponent(raw + ' karaoke') + '&key=' + key;
+    + '&videoEmbeddable=true&q=' + encodeURIComponent(raw + ' karaoke') + '&key=' + YT_KEY;
   try {
     const r = await fetch(url);
     const d = await r.json();
@@ -172,6 +190,41 @@ async function go() {
     })));
   } catch (err) {
     alert('Erro na busca: ' + err.message);
+  }
+}
+
+async function importPlaylist() {
+  const raw = document.getElementById('pl').value.trim();
+  const m = raw.match(/[?&]list=([\w-]+)/) || raw.match(/^([\w-]{13,})$/);
+  if (!m) { alert('Cole a URL de uma playlist (precisa conter "list=").'); return; }
+
+  const btn = document.getElementById('plBtn');
+  btn.disabled = true;
+  btn.textContent = '...';
+  let token = '', total = 0;
+  try {
+    do {
+      const url = 'https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50'
+        + '&playlistId=' + m[1] + '&key=' + YT_KEY + (token ? '&pageToken=' + token : '');
+      const d = await (await fetch(url)).json();
+      if (d.error) throw new Error(d.error.message);
+      d.items.forEach(i => {
+        const id = i.snippet.resourceId && i.snippet.resourceId.videoId;
+        if (!id || i.snippet.title === 'Deleted video') return;
+        queue.push({ id, title: i.snippet.title, thumb: `https://i.ytimg.com/vi/${id}/mqdefault.jpg` });
+        total++;
+      });
+      token = d.nextPageToken || '';
+    } while (token);
+    document.getElementById('pl').value = '';
+    drawQueue();
+    if (!current) next();
+    alert(total + ' música(s) adicionada(s) à fila.');
+  } catch (err) {
+    alert('Erro ao importar: ' + err.message + '\n\nA playlist precisa ser pública ou não listada.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Importar';
   }
 }
 
@@ -251,10 +304,12 @@ function next() {
   if (!current) {
     songKey = null;
     set(ref(db, `sessions/${code}/current`), null);
+    document.getElementById('tvTitle').textContent = '—';
     if (player) player.stopVideo();
     return;
   }
 
+  document.getElementById('tvTitle').textContent = current.title;
   songKey = 's' + Date.now();
   set(ref(db, `sessions/${code}/current`), {
     videoId: current.id, title: current.title, songKey
@@ -264,15 +319,30 @@ function next() {
     const n = Object.keys(votes).length;
     document.getElementById('votes').textContent = n ? `${n} nota${n > 1 ? 's' : ''} recebida${n > 1 ? 's' : ''}` : '';
   });
+  if (tvMode) { if (player) player.stopVideo(); return; }
   if (player && player.loadVideoById) player.loadVideoById(current.id);
   else pending = true;
 }
 
+let tvMode = false;
+
+function setMode(tv) {
+  tvMode = tv;
+  document.getElementById('tvcard').classList.toggle('on', tv);
+  document.getElementById('modeBtn').textContent = tv ? '▶️ Usar player embutido' : '📺 Usar TV externa';
+  document.getElementById('skipBtn').textContent = tv ? 'Encerrar → nota' : 'Pular ⏭';
+  if (tv && player) player.stopVideo();
+  else if (!tv && current && player && player.loadVideoById) player.loadVideoById(current.id);
+}
+
 document.getElementById('goBtn').onclick = go;
+document.getElementById('plBtn').onclick = importPlaylist;
+document.getElementById('modeBtn').onclick = () => setMode(!tvMode);
 document.getElementById('nextBtn').onclick = next;
 document.getElementById('skipBtn').onclick = () => {
   if (document.getElementById('score').classList.contains('on')) next();
   else showScore();
 };
 document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+document.getElementById('pl').addEventListener('keydown', e => { if (e.key === 'Enter') importPlaylist(); });
 </script>
