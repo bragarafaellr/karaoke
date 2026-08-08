@@ -81,6 +81,8 @@
     color: #8b82a8; font-variant-numeric: tabular-nums; min-width: 20px;
   }
   .empty { color: #6b6484; font-size: 14px; }
+  .status { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 8px; }
+  .status.err { color: #ff7a7a; }
 </style>
 
 <h1>🎤 Karaokê</h1>
@@ -135,7 +137,7 @@
   <button id="plBtn">Importar</button>
 </div>
 
-<h2>Fila</h2>
+<h2>Fila <span id="plStatus" class="status"></span></h2>
 <ol id="queue"></ol>
 <p id="queueEmpty" class="empty">Vazia. Busque uma música acima.</p>
 
@@ -175,7 +177,7 @@ const playlistUrl = 'https://www.youtube.com/playlist?list=PLG1LMcPN2vLk&jct=8tA
   }
 })();
 
-let player, queue = [], current = null, scoreTimer = null;
+let player, queue = [], current = null;
 let songKey = null, stopVotes = null, votes = {};
 
 let pending = false;
@@ -249,17 +251,25 @@ async function importPlaylist(rawUrl, silent) {
       token = d.nextPageToken || '';
     } while (token);
     drawQueue();
+    const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    setStatus(`playlist lida ${hora} · ${novos} nova(s)`, false);
     if (silent) return;
     document.getElementById('pl').value = '';
     if (!current) next();
     alert(novos + ' música(s) nova(s) adicionada(s)'
       + (repetidos ? ` · ${repetidos} já estavam na fila ou já tocaram.` : '.'));
   } catch (err) {
-    if (silent) console.error('Importação automática falhou:', err);
-    else alert('Erro ao importar: ' + err.message + '\n\nA playlist precisa ser pública ou não listada.');
+    setStatus('falha ao ler playlist: ' + err.message, true);
+    if (!silent) alert('Erro ao importar: ' + err.message + '\n\nA playlist precisa ser pública ou não listada.');
   } finally {
     if (!silent) { btn.disabled = false; btn.textContent = 'Importar'; }
   }
+}
+
+function setStatus(txt, isErr) {
+  const el = document.getElementById('plStatus');
+  el.textContent = txt;
+  el.classList.toggle('err', !!isErr);
 }
 
 function render(items) {
@@ -334,14 +344,10 @@ function showScore() {
 
   el.classList.add('on');
 
-  let t = 10;
-  scoreTimer = setInterval(() => { if (--t <= 0) next(); }, 1000);
-
   importPlaylist(playlistUrl, true);
 }
 
 function next() {
-  clearInterval(scoreTimer);
   document.getElementById('score').classList.remove('on');
 
   if (stopVotes) { stopVotes(); stopVotes = null; }
