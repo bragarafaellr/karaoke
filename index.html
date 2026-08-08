@@ -188,6 +188,7 @@ if (window.YT && window.YT.Player) initPlayer();
 else window.onYouTubeIframeAPIReady = initPlayer;
 
 const YT_KEY = 'AIzaSyA4gvuREQP7LIDijMceoh2914qh39cTkNQ';
+const seen = new Set();
 
 function videoId(url) {
   const m = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/);
@@ -225,7 +226,7 @@ async function importPlaylist() {
   const btn = document.getElementById('plBtn');
   btn.disabled = true;
   btn.textContent = '...';
-  let token = '', total = 0;
+  let token = '', novos = 0, repetidos = 0;
   try {
     do {
       const url = 'https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50'
@@ -235,15 +236,18 @@ async function importPlaylist() {
       d.items.forEach(i => {
         const id = i.snippet.resourceId && i.snippet.resourceId.videoId;
         if (!id || i.snippet.title === 'Deleted video') return;
+        if (seen.has(id)) { repetidos++; return; }
+        seen.add(id);
         queue.push({ id, title: i.snippet.title, thumb: `https://i.ytimg.com/vi/${id}/mqdefault.jpg` });
-        total++;
+        novos++;
       });
       token = d.nextPageToken || '';
     } while (token);
     document.getElementById('pl').value = '';
     drawQueue();
     if (!current) next();
-    alert(total + ' música(s) adicionada(s) à fila.');
+    alert(novos + ' música(s) nova(s) adicionada(s)'
+      + (repetidos ? ` · ${repetidos} já estavam na fila ou já tocaram.` : '.'));
   } catch (err) {
     alert('Erro ao importar: ' + err.message + '\n\nA playlist precisa ser pública ou não listada.');
   } finally {
@@ -269,6 +273,7 @@ function render(items) {
 }
 
 function add(v) {
+  seen.add(v.id);
   queue.push(v);
   drawQueue();
   if (!current) next();
