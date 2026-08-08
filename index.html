@@ -55,13 +55,14 @@
   button:hover { background: #6b4aef; }
   button.ghost { background: #241f38; color: #b9b0d4; padding: 8px 12px; font-weight: 400; }
   #votes { color: #8b82a8; font-size: 14px; }
-  #qrbox {
+  .qrbox {
     display: flex; gap: 12px; align-items: center; padding: 12px;
     background: #16132099; border-radius: 12px; margin-top: 12px;
   }
-  #qrbox canvas { border-radius: 6px; background: #fff; }
-  #qrbox .info { font-size: 13px; color: #8b82a8; min-width: 0; }
-  #qrbox .code { font-size: 28px; font-weight: 800; color: #f2eef8; letter-spacing: 0.1em; }
+  .qrbox canvas { border-radius: 6px; background: #fff; }
+  .qrbox .info { font-size: 13px; color: #8b82a8; min-width: 0; }
+  .qrbox .code { font-size: 28px; font-weight: 800; color: #f2eef8; letter-spacing: 0.1em; }
+  .qrbox .hl { color: #b9b0d4; font-weight: 600; }
   ul, ol { list-style: none; margin: 0; padding: 0; }
   li {
     display: flex; align-items: center; gap: 12px; padding: 8px;
@@ -100,12 +101,21 @@
   <span id="votes"></span>
 </div>
 
-<div id="qrbox">
+<div class="qrbox">
   <canvas id="qr"></canvas>
   <div class="info">
-    Escaneie para dar nota<br>
+    <span class="hl">Escaneie para dar nota</span><br>
     <span class="code" id="code"></span><br>
     <span id="voteUrl"></span>
+  </div>
+</div>
+
+<div class="qrbox">
+  <canvas id="qrPl"></canvas>
+  <div class="info">
+    <span class="hl">Escaneie para adicionar músicas</span><br>
+    Abre a playlist no YouTube.<br>
+    Precisa estar logado numa conta Google.
   </div>
 </div>
 
@@ -145,13 +155,17 @@ const code = Math.random().toString(36).slice(2, 6).toUpperCase();
 const voteUrl = location.href.replace(/[^/]*$/, '') + 'vote.html?s=' + code;
 document.getElementById('code').textContent = code;
 document.getElementById('voteUrl').textContent = voteUrl.replace(/^https?:\/\//, '');
+const playlistUrl = 'https://www.youtube.com/playlist?list=PLG1LMcPN2vLk&jct=8tAQ5GOO0GuLWx_q7fbriA';
+
 (async () => {
   try {
     const QRCode = (await import('https://cdn.jsdelivr.net/npm/qrcode@1.5.3/+esm')).default;
     await QRCode.toCanvas(document.getElementById('qr'), voteUrl, { width: 120, margin: 1 });
+    await QRCode.toCanvas(document.getElementById('qrPl'), playlistUrl, { width: 120, margin: 1 });
   } catch (e) {
     document.getElementById('qr').remove();
-    console.error('QR falhou, use o link abaixo:', e);
+    document.getElementById('qrPl').remove();
+    console.error('QR falhou, use os links:', e);
   }
 })();
 
