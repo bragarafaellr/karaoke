@@ -224,14 +224,13 @@ async function go() {
   }
 }
 
-async function importPlaylist() {
-  const raw = document.getElementById('pl').value.trim();
+async function importPlaylist(rawUrl, silent) {
+  const raw = (rawUrl || document.getElementById('pl').value).trim();
   const m = raw.match(/[?&]list=([\w-]+)/) || raw.match(/^([\w-]{13,})$/);
-  if (!m) { alert('Cole a URL de uma playlist (precisa conter "list=").'); return; }
+  if (!m) { if (!silent) alert('Cole a URL de uma playlist (precisa conter "list=").'); return; }
 
   const btn = document.getElementById('plBtn');
-  btn.disabled = true;
-  btn.textContent = '...';
+  if (!silent) { btn.disabled = true; btn.textContent = '...'; }
   let token = '', novos = 0, repetidos = 0;
   try {
     do {
@@ -249,16 +248,17 @@ async function importPlaylist() {
       });
       token = d.nextPageToken || '';
     } while (token);
-    document.getElementById('pl').value = '';
     drawQueue();
+    if (silent) return;
+    document.getElementById('pl').value = '';
     if (!current) next();
     alert(novos + ' música(s) nova(s) adicionada(s)'
       + (repetidos ? ` · ${repetidos} já estavam na fila ou já tocaram.` : '.'));
   } catch (err) {
-    alert('Erro ao importar: ' + err.message + '\n\nA playlist precisa ser pública ou não listada.');
+    if (silent) console.error('Importação automática falhou:', err);
+    else alert('Erro ao importar: ' + err.message + '\n\nA playlist precisa ser pública ou não listada.');
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Importar';
+    if (!silent) { btn.disabled = false; btn.textContent = 'Importar'; }
   }
 }
 
@@ -336,6 +336,8 @@ function showScore() {
 
   let t = 10;
   scoreTimer = setInterval(() => { if (--t <= 0) next(); }, 1000);
+
+  importPlaylist(playlistUrl, true);
 }
 
 function next() {
