@@ -28,11 +28,17 @@
     display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
     margin-top: 14px; max-width: 90%;
   }
-  #allVotes span {
+  .chip {
     font-size: 13px; padding: 4px 10px; border-radius: 999px;
     background: #241f38; color: #b9b0d4;
   }
-  #allVotes b { color: #f2eef8; font-variant-numeric: tabular-nums; }
+  .chip b { color: #f2eef8; font-variant-numeric: tabular-nums; }
+  #board li { flex-wrap: wrap; align-items: baseline; }
+  #board .sc {
+    font-size: 24px; font-weight: 800; color: #7c5cff;
+    font-variant-numeric: tabular-nums; margin-left: auto;
+  }
+  #board .chips { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; padding-left: 32px; }
   #tvcard {
     position: absolute; inset: 0; z-index: 1; display: none;
     flex-direction: column; align-items: center; justify-content: center;
@@ -143,6 +149,10 @@
 
 <h2>Resultados</h2>
 <ul id="results"></ul>
+
+<h2>Placar</h2>
+<ol id="board"></ol>
+<p id="boardEmpty" class="empty">Nenhuma música pontuada ainda.</p>
 
 <script src="https://www.youtube.com/iframe_api"></script>
 <script type="module">
@@ -312,6 +322,42 @@ function drawQueue() {
   document.getElementById('queueEmpty').hidden = queue.length > 0;
 }
 
+const history = [];
+
+function chip(v) {
+  const s = document.createElement('span');
+  s.className = 'chip';
+  s.textContent = (v.nick || 'anônimo') + ' ';
+  const b = document.createElement('b');
+  b.textContent = v.score;
+  s.append(b);
+  return s;
+}
+
+function drawBoard() {
+  const ol = document.getElementById('board');
+  ol.innerHTML = '';
+  [...history].sort((a, b) => b.final - a.final).forEach(h => {
+    const li = document.createElement('li');
+
+    const t = document.createElement('span');
+    t.className = 't';
+    t.textContent = h.title;
+
+    const sc = document.createElement('span');
+    sc.className = 'sc';
+    sc.textContent = h.final;
+
+    const chips = document.createElement('div');
+    chips.className = 'chips';
+    h.votos.forEach(v => chips.append(chip(v)));
+
+    li.append(t, sc, chips);
+    ol.append(li);
+  });
+  document.getElementById('boardEmpty').hidden = history.length > 0;
+}
+
 function showScore() {
   const list = Object.values(votes).map(v => v.score);
   const avg = list.length ? Math.round(list.reduce((a, b) => a + b, 0) / list.length) : 50;
@@ -331,16 +377,11 @@ function showScore() {
 
   const box = document.getElementById('allVotes');
   box.innerHTML = '';
-  Object.values(votes)
-    .sort((a, b) => b.score - a.score)
-    .forEach(v => {
-      const s = document.createElement('span');
-      s.textContent = (v.nick || 'anônimo') + ' ';
-      const b = document.createElement('b');
-      b.textContent = v.score;
-      s.append(b);
-      box.append(s);
-    });
+  const lista = Object.values(votes).sort((a, b) => b.score - a.score);
+  lista.forEach(v => box.append(chip(v)));
+
+  history.push({ title: current ? current.title : '—', final, avg, delta, votos: lista });
+  drawBoard();
 
   el.classList.add('on');
 
