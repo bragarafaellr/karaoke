@@ -24,6 +24,15 @@
   #score .n { font-size: 72px; font-weight: 800; letter-spacing: -0.04em; color: #7c5cff; line-height: 1; }
   #score .m { font-size: 18px; font-weight: 600; margin-top: 8px; }
   #score .s { font-size: 13px; color: #6b6484; }
+  #allVotes {
+    display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+    margin-top: 14px; max-width: 90%;
+  }
+  #allVotes span {
+    font-size: 13px; padding: 4px 10px; border-radius: 999px;
+    background: #241f38; color: #b9b0d4;
+  }
+  #allVotes b { color: #f2eef8; font-variant-numeric: tabular-nums; }
   #tvcard {
     position: absolute; inset: 0; z-index: 1; display: none;
     flex-direction: column; align-items: center; justify-content: center;
@@ -76,6 +85,7 @@
     <div class="n"></div>
     <div class="m"></div>
     <div class="s"></div>
+    <div id="allVotes"></div>
     <button id="nextBtn" style="margin-top:16px">Próxima ▶</button>
   </div>
   <div id="tvcard">
@@ -283,6 +293,20 @@ function showScore() {
   el.querySelector('.n').textContent = final;
   el.querySelector('.m').textContent = msg;
   el.querySelector('.s').textContent = sub;
+
+  const box = document.getElementById('allVotes');
+  box.innerHTML = '';
+  Object.values(votes)
+    .sort((a, b) => b.score - a.score)
+    .forEach(v => {
+      const s = document.createElement('span');
+      s.textContent = (v.nick || 'anônimo') + ' ';
+      const b = document.createElement('b');
+      b.textContent = v.score;
+      s.append(b);
+      box.append(s);
+    });
+
   el.classList.add('on');
 
   let t = 10;
