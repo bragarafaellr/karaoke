@@ -1,0 +1,275 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Karaokê</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px;
+    background: #0d0b14; color: #f2eef8;
+    font: 16px/1.5 system-ui, -apple-system, sans-serif;
+    max-width: 900px; margin-inline: auto;
+  }
+  h1 { font-size: 20px; margin: 0 0 16px; letter-spacing: -0.02em; }
+  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em;
+       color: #8b82a8; margin: 24px 0 8px; }
+  #stage { position: relative; padding-top: 56.25%; background: #000;
+           border-radius: 12px; overflow: hidden; }
+  #stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #score {
+    position: absolute; inset: 0; z-index: 2; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    background: #0d0b14ee; text-align: center; gap: 4px; padding: 16px;
+  }
+  #score.on { display: flex; }
+  #score .n { font-size: 72px; font-weight: 800; letter-spacing: -0.04em; color: #7c5cff; line-height: 1; }
+  #score .m { font-size: 18px; font-weight: 600; margin-top: 8px; }
+  #score .s { font-size: 13px; color: #6b6484; }
+  #now { margin: 12px 0; font-size: 18px; font-weight: 600; min-height: 27px; }
+  .row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+  input {
+    flex: 1; min-width: 0; padding: 12px; border-radius: 10px;
+    border: 1px solid #2c2740; background: #16132099; color: inherit; font: inherit;
+  }
+  input:focus { outline: 2px solid #7c5cff; border-color: transparent; }
+  button {
+    padding: 12px 16px; border: 0; border-radius: 10px;
+    background: #7c5cff; color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button:hover { background: #6b4aef; }
+  button.ghost { background: #241f38; color: #b9b0d4; padding: 8px 12px; font-weight: 400; }
+  #votes { color: #8b82a8; font-size: 14px; }
+  #qrbox {
+    display: flex; gap: 12px; align-items: center; padding: 12px;
+    background: #16132099; border-radius: 12px; margin-top: 12px;
+  }
+  #qrbox canvas { border-radius: 6px; background: #fff; }
+  #qrbox .info { font-size: 13px; color: #8b82a8; min-width: 0; }
+  #qrbox .code { font-size: 28px; font-weight: 800; color: #f2eef8; letter-spacing: 0.1em; }
+  ul, ol { list-style: none; margin: 0; padding: 0; }
+  li {
+    display: flex; align-items: center; gap: 12px; padding: 8px;
+    border-radius: 10px; background: #16132099; margin-bottom: 6px;
+  }
+  li img { width: 80px; border-radius: 6px; flex-shrink: 0; }
+  li .t { flex: 1; min-width: 0; font-size: 14px; }
+  ol { counter-reset: n; }
+  ol li::before {
+    counter-increment: n; content: counter(n);
+    color: #8b82a8; font-variant-numeric: tabular-nums; min-width: 20px;
+  }
+  .empty { color: #6b6484; font-size: 14px; }
+  details { margin-top: 24px; font-size: 14px; color: #8b82a8; }
+  summary { cursor: pointer; }
+</style>
+
+<h1>🎤 Karaokê</h1>
+
+<div id="stage">
+  <div id="player"></div>
+  <div id="score">
+    <div class="n"></div>
+    <div class="m"></div>
+    <div class="s"></div>
+    <button id="nextBtn" style="margin-top:16px">Próxima ▶</button>
+  </div>
+</div>
+<div id="now"></div>
+<div class="row">
+  <button class="ghost" id="skipBtn">Pular ⏭</button>
+  <span id="votes"></span>
+</div>
+
+<div id="qrbox">
+  <canvas id="qr"></canvas>
+  <div class="info">
+    Escaneie para dar nota<br>
+    <span class="code" id="code"></span><br>
+    <span id="voteUrl"></span>
+  </div>
+</div>
+
+<h2>Buscar</h2>
+<div class="row">
+  <input id="q" placeholder="ex: evidências karaokê — ou cole um link do YouTube">
+  <button id="goBtn">Buscar</button>
+</div>
+
+<h2>Fila</h2>
+<ol id="queue"></ol>
+<p id="queueEmpty" class="empty">Vazia. Busque uma música acima.</p>
+
+<h2>Resultados</h2>
+<ul id="results"></ul>
+
+<details>
+  <summary>Ativar busca integrada (chave da YouTube API)</summary>
+  <p>Sem chave, você só pode colar links do YouTube. Para buscar por nome, crie uma
+  chave gratuita em console.cloud.google.com → ative "YouTube Data API v3" → Credenciais → Criar chave de API.</p>
+  <div class="row"><input id="key" placeholder="Cole a chave aqui"></div>
+</details>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, onValue }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAW3sSLIZmfip5mBZRsy4NfZ_gv9hA7WKs",
+  authDomain: "karaoke-mp31.firebaseapp.com",
+  databaseURL: "https://karaoke-mp31-default-rtdb.firebaseio.com",
+  projectId: "karaoke-mp31"
+};
+
+const db = getDatabase(initializeApp(firebaseConfig));
+
+const code = Math.random().toString(36).slice(2, 6).toUpperCase();
+const voteUrl = location.href.replace(/[^/]*$/, '') + 'vote.html?s=' + code;
+document.getElementById('code').textContent = code;
+document.getElementById('voteUrl').textContent = voteUrl.replace(/^https?:\/\//, '');
+QRCode.toCanvas(document.getElementById('qr'), voteUrl, { width: 120, margin: 1 });
+
+let player, queue = [], current = null, scoreTimer = null;
+let songKey = null, stopVotes = null, votes = {};
+
+window.onYouTubeIframeAPIReady = () => {
+  player = new YT.Player('player', {
+    playerVars: { playsinline: 1 },
+    events: { onStateChange: e => { if (e.data === YT.PlayerState.ENDED) showScore(); } }
+  });
+};
+
+function videoId(url) {
+  const m = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/);
+  return m ? m[1] : (/^[\w-]{11}$/.test(url.trim()) ? url.trim() : null);
+}
+
+async function go() {
+  const raw = document.getElementById('q').value.trim();
+  if (!raw) return;
+  const id = videoId(raw);
+  if (id) {
+    add({ id, title: 'Vídeo ' + id, thumb: `https://i.ytimg.com/vi/${id}/mqdefault.jpg` });
+    document.getElementById('q').value = '';
+    return;
+  }
+  const key = document.getElementById('key').value.trim();
+  if (!key) {
+    alert('Sem chave da API você só pode colar links do YouTube. Abra "Ativar busca integrada" abaixo.');
+    return;
+  }
+  const url = 'https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=10'
+    + '&videoEmbeddable=true&q=' + encodeURIComponent(raw + ' karaoke') + '&key=' + key;
+  try {
+    const r = await fetch(url);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error.message);
+    render(d.items.map(i => ({
+      id: i.id.videoId, title: i.snippet.title, thumb: i.snippet.thumbnails.medium.url
+    })));
+  } catch (err) {
+    alert('Erro na busca: ' + err.message);
+  }
+}
+
+function render(items) {
+  const ul = document.getElementById('results');
+  ul.innerHTML = '';
+  items.forEach(v => {
+    const li = document.createElement('li');
+    li.innerHTML = `<img src="${v.thumb}"><span class="t"></span>`;
+    li.querySelector('.t').textContent = v.title;
+    const b = document.createElement('button');
+    b.className = 'ghost';
+    b.textContent = '+ Fila';
+    b.onclick = () => add(v);
+    li.append(b);
+    ul.append(li);
+  });
+}
+
+function add(v) {
+  queue.push(v);
+  drawQueue();
+  if (!current) next();
+}
+
+function drawQueue() {
+  const ol = document.getElementById('queue');
+  ol.innerHTML = '';
+  queue.forEach((v, i) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<img src="${v.thumb}"><span class="t"></span>`;
+    li.querySelector('.t').textContent = v.title;
+    const b = document.createElement('button');
+    b.className = 'ghost';
+    b.textContent = '✕';
+    b.onclick = () => { queue.splice(i, 1); drawQueue(); };
+    li.append(b);
+    ol.append(li);
+  });
+  document.getElementById('queueEmpty').hidden = queue.length > 0;
+}
+
+function showScore() {
+  const list = Object.values(votes).map(v => v.score);
+  const avg = list.length ? Math.round(list.reduce((a, b) => a + b, 0) / list.length) : 50;
+  const delta = Math.round(Math.random() * 50 - 25);
+  const final = Math.max(0, Math.min(100, avg + delta));
+  const msg = final >= 95 ? 'Perfeito! 🏆' : final >= 85 ? 'Mandou muito! 🎉'
+            : final >= 70 ? 'Boa! 👏' : final >= 45 ? 'Passou 😌' : 'Vai melhorar 😅';
+
+  const sub = list.length
+    ? `público: ${avg} (${list.length} voto${list.length > 1 ? 's' : ''}) · júri técnico: ${delta >= 0 ? '+' : ''}${delta}`
+    : `ninguém votou · júri técnico decidiu sozinho`;
+
+  const el = document.getElementById('score');
+  el.querySelector('.n').textContent = final;
+  el.querySelector('.m').textContent = msg;
+  el.querySelector('.s').textContent = sub;
+  el.classList.add('on');
+
+  let t = 10;
+  scoreTimer = setInterval(() => { if (--t <= 0) next(); }, 1000);
+}
+
+function next() {
+  clearInterval(scoreTimer);
+  document.getElementById('score').classList.remove('on');
+
+  if (stopVotes) { stopVotes(); stopVotes = null; }
+  votes = {};
+  document.getElementById('votes').textContent = '';
+
+  current = queue.shift() || null;
+  drawQueue();
+  document.getElementById('now').textContent = current ? '▶ ' + current.title : '';
+
+  if (!current) {
+    songKey = null;
+    set(ref(db, `sessions/${code}/current`), null);
+    player.stopVideo();
+    return;
+  }
+
+  songKey = 's' + Date.now();
+  set(ref(db, `sessions/${code}/current`), {
+    videoId: current.id, title: current.title, songKey
+  });
+  stopVotes = onValue(ref(db, `sessions/${code}/votes/${songKey}`), snap => {
+    votes = snap.val() || {};
+    const n = Object.keys(votes).length;
+    document.getElementById('votes').textContent = n ? `${n} nota${n > 1 ? 's' : ''} recebida${n > 1 ? 's' : ''}` : '';
+  });
+  player.loadVideoById(current.id);
+}
+
+document.getElementById('goBtn').onclick = go;
+document.getElementById('nextBtn').onclick = next;
+document.getElementById('skipBtn').onclick = () => {
+  if (document.getElementById('score').classList.contains('on')) next();
+  else showScore();
+};
+document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+</script>

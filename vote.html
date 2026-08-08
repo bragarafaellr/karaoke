@@ -1,0 +1,103 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dar nota</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 20px;
+    background: #0d0b14; color: #f2eef8;
+    font: 16px/1.5 system-ui, -apple-system, sans-serif;
+    max-width: 480px; margin-inline: auto;
+  }
+  .label { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: #8b82a8; }
+  #title { font-size: 22px; font-weight: 700; margin: 4px 0 32px; letter-spacing: -0.02em; }
+  #value { font-size: 88px; font-weight: 800; text-align: center; color: #7c5cff;
+           line-height: 1; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; margin: 24px 0 8px; accent-color: #7c5cff; height: 32px; }
+  .ends { display: flex; justify-content: space-between; font-size: 13px; color: #6b6484; }
+  input[type=text] {
+    width: 100%; padding: 12px; margin: 24px 0 12px; border-radius: 10px;
+    border: 1px solid #2c2740; background: #16132099; color: inherit; font: inherit;
+  }
+  button {
+    width: 100%; padding: 16px; border: 0; border-radius: 12px;
+    background: #7c5cff; color: #fff; font: inherit; font-size: 17px; font-weight: 700;
+  }
+  button:disabled { background: #241f38; color: #6b6484; }
+  #msg { text-align: center; margin-top: 16px; font-size: 14px; color: #8b82a8; min-height: 21px; }
+</style>
+
+<div class="label">Cantando agora</div>
+<div id="title">Aguardando…</div>
+
+<div id="value">50</div>
+<input type="range" id="slider" min="0" max="100" value="50" disabled>
+<div class="ends"><span>0 — péssimo</span><span>ótimo — 100</span></div>
+
+<input type="text" id="nick" placeholder="Seu apelido (opcional)" maxlength="20">
+<button id="send" disabled>Enviar nota</button>
+<div id="msg"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, onValue }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAW3sSLIZmfip5mBZRsy4NfZ_gv9hA7WKs",
+  authDomain: "karaoke-mp31.firebaseapp.com",
+  databaseURL: "https://karaoke-mp31-default-rtdb.firebaseio.com",
+  projectId: "karaoke-mp31"
+};
+
+const db = getDatabase(initializeApp(firebaseConfig));
+
+const code = new URLSearchParams(location.search).get('s');
+const deviceId = 'd' + Math.random().toString(36).slice(2, 10);
+
+const slider = document.getElementById('slider');
+const send = document.getElementById('send');
+const msg = document.getElementById('msg');
+let songKey = null;
+
+if (!code) {
+  document.getElementById('title').textContent = 'Link inválido';
+  msg.textContent = 'Escaneie o QR code na tela do karaokê.';
+} else {
+  onValue(ref(db, `sessions/${code}/current`), snap => {
+    const c = snap.val();
+    if (!c) {
+      document.getElementById('title').textContent = 'Aguardando…';
+      songKey = null;
+      slider.disabled = send.disabled = true;
+      msg.textContent = '';
+      return;
+    }
+    document.getElementById('title').textContent = c.title;
+    if (c.songKey !== songKey) {
+      songKey = c.songKey;
+      slider.value = 50;
+      document.getElementById('value').textContent = 50;
+      slider.disabled = send.disabled = false;
+      msg.textContent = '';
+    }
+  });
+}
+
+slider.oninput = () => { document.getElementById('value').textContent = slider.value; };
+
+send.onclick = async () => {
+  if (!songKey) return;
+  send.disabled = slider.disabled = true;
+  try {
+    await set(ref(db, `sessions/${code}/votes/${songKey}/${deviceId}`), {
+      score: Number(slider.value),
+      nick: document.getElementById('nick').value.trim() || null
+    });
+    msg.textContent = 'Nota enviada ✓ — aguarde a próxima música';
+  } catch (e) {
+    send.disabled = slider.disabled = false;
+    msg.textContent = 'Erro ao enviar: ' + e.message;
+  }
+};
+</script>
