@@ -54,6 +54,11 @@
   }
   button:hover { background: #6b4aef; }
   button.ghost { background: #241f38; color: #b9b0d4; padding: 8px 12px; font-weight: 400; }
+  .btnlink {
+    display: inline-block; padding: 8px 12px; border-radius: 10px;
+    background: #241f38; color: #b9b0d4; text-decoration: none; font-size: 16px;
+  }
+  .btnlink[hidden] { display: none; }
   #votes { color: #8b82a8; font-size: 14px; }
   .qrbox {
     display: flex; gap: 12px; align-items: center; padding: 12px;
@@ -97,6 +102,7 @@
 <div id="now"></div>
 <div class="row">
   <button class="ghost" id="modeBtn">📺 Usar TV externa</button>
+  <a class="ghost btnlink" id="ytBtn" target="_blank" rel="noopener" hidden>▶️ Abrir no YouTube</a>
   <button class="ghost" id="skipBtn">Pular ⏭</button>
   <span id="votes"></span>
 </div>
@@ -344,14 +350,19 @@ function next() {
   drawQueue();
   document.getElementById('now').textContent = current ? '▶ ' + current.title : '';
 
+  const ytBtn = document.getElementById('ytBtn');
+
   if (!current) {
     songKey = null;
     set(ref(db, `sessions/${code}/current`), null);
     document.getElementById('tvTitle').textContent = '—';
+    ytBtn.hidden = true;
     if (player) player.stopVideo();
     return;
   }
 
+  ytBtn.href = 'https://www.youtube.com/watch?v=' + current.id;
+  ytBtn.hidden = false;
   document.getElementById('tvTitle').textContent = current.title;
   songKey = 's' + Date.now();
   set(ref(db, `sessions/${code}/current`), {
